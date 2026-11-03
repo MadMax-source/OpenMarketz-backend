@@ -1,0 +1,3 @@
+allowBuilds:
+  '@prisma/client': false
+  '@scarf/scarf': false
