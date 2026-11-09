@@ -5,6 +5,16 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module.js';
 
+
+/*
+
+corepack pnpm install
+corepack pnpm db:generate
+corepack pnpm db:migrate:dev
+corepack pnpm db:seed
+corepack pnpm start:dev
+
+*/
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   const config = app.get(ConfigService);
@@ -30,6 +40,7 @@ async function bootstrap() {
       .setTitle('OpenMarketz API')
       .setDescription('Backend API for the OpenMarketz marketplace')
       .setVersion('1.0')
+      .addBearerAuth()
       .addCookieAuth('openmarketz_session')
       .build();
     const document = SwaggerModule.createDocument(app, swaggerConfig);

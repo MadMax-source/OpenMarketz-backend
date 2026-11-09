@@ -235,7 +235,7 @@ model SellerApplication {
   categories              String[]
   businessType            String
   registrationNumber      String?
-  bankCode                String
+  bankCode                String?
   bankName                String
   accountNumberCiphertext String
   accountName             String
@@ -299,7 +299,7 @@ model SellerStore {
 model PayoutAccount {
   id                      String      @id @default(cuid())
   storeId                 String      @unique
-  bankCode                String
+  bankCode                String?
   bankName                String
   accountNumberCiphertext String
   accountName             String
@@ -396,6 +396,7 @@ model Product {
   variants        ProductVariant[]
   cartItems       CartItem[]
   offers          ProductOffer[]
+  conversations   Conversation[]
   marketResponses MarketResponse[]
   orderItems      OrderItem[]
   reviews         Review[]
@@ -677,12 +678,14 @@ model Conversation {
   kind         ConversationKind          @default(PRODUCT)
   productId    String?
   orderId      String?
+  product      Product?                  @relation(fields: [productId], references: [id], onDelete: SetNull)
   participants ConversationParticipant[]
   messages     Message[]
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
 
   @@index([updatedAt])
+  @@index([productId])
 }
 
 model ConversationParticipant {

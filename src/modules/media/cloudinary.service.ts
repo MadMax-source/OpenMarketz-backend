@@ -113,7 +113,6 @@ export class CloudinaryService {
       type,
       overwrite: false,
       allowed_formats: [...new Set(allowedFormats)].join(','),
-      max_file_size: MAX_BYTES[input.purpose],
     };
     const signature = cloudinary.utils.api_sign_request(params, apiSecret);
 

@@ -25,6 +25,42 @@ describe('validateEnvironment', () => {
     ).not.toThrow();
   });
 
+  it('allows console email delivery only in development', () => {
+    expect(
+      validateEnvironment({
+        NODE_ENV: 'development',
+        AUTH_EMAIL_MODE: 'console',
+      }).AUTH_EMAIL_MODE,
+    ).toBe('console');
+
+    expect(() =>
+      validateEnvironment({
+        NODE_ENV: 'production',
+        AUTH_EMAIL_MODE: 'console',
+      }),
+    ).toThrow('Console email delivery is only allowed in development.');
+  });
+
+  it('requires Gmail SMTP credentials and rejects it in production', () => {
+    expect(() =>
+      validateEnvironment({
+        AUTH_EMAIL_MODE: 'gmail',
+        GMAIL_USER: 'buyer@example.com',
+      }),
+    ).toThrow(
+      'GMAIL_USER and GMAIL_APP_PASSWORD are required when AUTH_EMAIL_MODE=gmail.',
+    );
+
+    expect(() =>
+      validateEnvironment({
+        NODE_ENV: 'production',
+        AUTH_EMAIL_MODE: 'gmail',
+        GMAIL_USER: 'buyer@example.com',
+        GMAIL_APP_PASSWORD: 'app-password',
+      }),
+    ).toThrow('Gmail SMTP delivery is only allowed in development.');
+  });
+
   it('rejects wildcard CORS origins', () => {
     expect(() =>
       validateEnvironment({ FRONTEND_ORIGINS: 'http://localhost:3000,*' }),

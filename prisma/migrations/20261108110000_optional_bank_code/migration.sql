@@ -1,0 +1,5 @@
+ALTER TABLE "SellerApplication"
+ALTER COLUMN "bankCode" DROP NOT NULL;
+
+ALTER TABLE "PayoutAccount"
+ALTER COLUMN "bankCode" DROP NOT NULL;

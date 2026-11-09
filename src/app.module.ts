@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { validateEnvironment } from './config/env.validation.js';
 import { PrismaModule } from './database/prisma.module.js';
 import { HealthModule } from './modules/health/health.module.js';
@@ -21,6 +21,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { SupportModule } from './modules/support/support.module.js';
 import { ReviewsModule } from './modules/reviews/reviews.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
+import { RealtimeThrottlerGuard } from './common/realtime-throttler.guard.js';
 
 @Module({
   imports: [
@@ -48,6 +49,6 @@ import { AdminModule } from './modules/admin/admin.module.js';
     ReviewsModule,
     AdminModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [{ provide: APP_GUARD, useClass: RealtimeThrottlerGuard }],
 })
 export class AppModule {}

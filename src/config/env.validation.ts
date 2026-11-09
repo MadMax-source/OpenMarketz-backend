@@ -23,6 +23,11 @@ const environmentSchema = Joi.object({
   PAYSTACK_SECRET_KEY: Joi.string().empty(''),
   PAYSTACK_PUBLIC_KEY: Joi.string().empty(''),
   PAYSTACK_CALLBACK_URL: Joi.string().uri().empty(''),
+  AUTH_EMAIL_MODE: Joi.string()
+    .valid('resend', 'console', 'gmail')
+    .default('resend'),
+  GMAIL_USER: Joi.string().email().empty(''),
+  GMAIL_APP_PASSWORD: Joi.string().empty(''),
   RESEND_API_KEY: Joi.string().empty(''),
   EMAIL_FROM: Joi.string().default('OpenMarketz <no-reply@example.com>'),
   REDIS_URL: Joi.string()
@@ -57,7 +62,23 @@ export function validateEnvironment(config: Record<string, unknown>) {
     throw error;
   }
 
+  if (
+    value.AUTH_EMAIL_MODE === 'gmail' &&
+    (!value.GMAIL_USER || !value.GMAIL_APP_PASSWORD)
+  ) {
+    throw new Error(
+      'GMAIL_USER and GMAIL_APP_PASSWORD are required when AUTH_EMAIL_MODE=gmail.',
+    );
+  }
+
   if (value.NODE_ENV === 'production') {
+    if (value.AUTH_EMAIL_MODE === 'console') {
+      throw new Error('Console email delivery is only allowed in development.');
+    }
+    if (value.AUTH_EMAIL_MODE === 'gmail') {
+      throw new Error('Gmail SMTP delivery is only allowed in development.');
+    }
+
     const required = [
       'DATABASE_URL',
       'JWT_ACCESS_SECRET',

@@ -77,9 +77,10 @@ export class CreateSellerApplicationDto {
   @Length(4, 80)
   idNumber!: string;
 
+  @IsOptional()
   @IsString()
   @Length(1, 100)
-  bankCode!: string;
+  bankCode?: string;
 
   @IsString()
   @Length(2, 100)
