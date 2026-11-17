@@ -11,6 +11,7 @@ import { SellersModule } from './modules/sellers/sellers.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { MediaModule } from './modules/media/media.module.js';
 import { CartModule } from './modules/cart/cart.module.js';
+import { AddressesModule } from './modules/addresses/addresses.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
 import { OffersModule } from './modules/offers/offers.module.js';
@@ -38,6 +39,7 @@ import { RealtimeThrottlerGuard } from './common/realtime-throttler.guard.js';
     CatalogModule,
     MediaModule,
     CartModule,
+    AddressesModule,
     OrdersModule,
     PaymentsModule,
     OffersModule,

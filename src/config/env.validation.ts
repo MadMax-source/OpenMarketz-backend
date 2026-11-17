@@ -5,6 +5,11 @@ const environmentSchema = Joi.object({
     .valid('development', 'test', 'production')
     .default('development'),
   PORT: Joi.number().port().default(4000),
+  PENDING_ORDER_TTL_MINUTES: Joi.number()
+    .integer()
+    .min(5)
+    .max(1440)
+    .default(30),
   API_PREFIX: Joi.string().default('api/v1'),
   FRONTEND_ORIGINS: Joi.string().default('http://localhost:3000'),
   DATABASE_URL: Joi.string()
@@ -23,6 +28,7 @@ const environmentSchema = Joi.object({
   PAYSTACK_SECRET_KEY: Joi.string().empty(''),
   PAYSTACK_PUBLIC_KEY: Joi.string().empty(''),
   PAYSTACK_CALLBACK_URL: Joi.string().uri().empty(''),
+  GOOGLE_MAPS_API_KEY: Joi.string().empty(''),
   AUTH_EMAIL_MODE: Joi.string()
     .valid('resend', 'console', 'gmail')
     .default('resend'),
@@ -30,6 +36,8 @@ const environmentSchema = Joi.object({
   GMAIL_APP_PASSWORD: Joi.string().empty(''),
   RESEND_API_KEY: Joi.string().empty(''),
   EMAIL_FROM: Joi.string().default('OpenMarketz <no-reply@example.com>'),
+  TERMII_API_KEY: Joi.string().empty(''),
+  TERMII_SENDER_ID: Joi.string().empty(''),
   REDIS_URL: Joi.string()
     .uri({ scheme: ['redis', 'rediss'] })
     .empty(''),

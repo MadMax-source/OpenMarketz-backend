@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service.js';
 import { RealtimeGateway } from '../realtime/realtime.gateway.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { CreateMessageDto } from './dto/create-message.dto.js';
 
 const conversationInclude = {
@@ -54,6 +55,7 @@ export class MessagingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeGateway,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async listConversations(userId: string) {
@@ -194,6 +196,26 @@ export class MessagingService {
       conversation.product?.seller.ownerId,
     );
     this.realtime.publishMessage(conversationId, response);
+    await Promise.all(
+      conversation.participants
+        .filter((participant) => participant.userId !== userId)
+        .map(async (participant) => {
+          try {
+            await this.notifications.create(
+              participant.userId,
+              'MESSAGE',
+              'New marketplace message',
+              text ?? 'You received a new message.',
+              '/messages',
+            );
+          } catch (error) {
+            console.error(
+              'Unable to create a notification for a new message.',
+              error,
+            );
+          }
+        }),
+    );
     return response;
   }
 

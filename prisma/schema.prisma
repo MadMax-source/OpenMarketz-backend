@@ -106,6 +106,7 @@ enum PaymentStatus {
   SUCCESS
   FAILED
   ABANDONED
+  REFUND_PENDING
   REFUNDED
   PARTIALLY_REFUNDED
 }
@@ -133,6 +134,7 @@ enum NotificationType {
   ACCOUNT
   PROMO
   MARKET_REQUEST
+  SUPPORT
 }
 
 enum SupportTicketStatus {
@@ -148,6 +150,13 @@ enum GiftContributionStatus {
   PAID
   FAILED
   REFUNDED
+}
+
+enum SellerSettlementStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
 }
 
 model User {
@@ -190,6 +199,7 @@ model User {
   reviews           Review[]
   wishlistItems     WishlistItem[]
   giftContributions GiftContribution[]
+  savedPaymentMethods SavedPaymentMethod[]
   auditEvents       AuditEvent[]
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
@@ -287,6 +297,8 @@ model SellerStore {
   bannerMedia   MediaAsset?      @relation("StoreBanner", fields: [bannerMediaId], references: [id], onDelete: SetNull)
   payoutAccount PayoutAccount?
   products      Product[]
+  orderItems    OrderItem[]
+  settlements   SellerSettlement[]
   offers        ProductOffer[]
   marketReplies MarketResponse[]
   reviews       Review[]
@@ -304,6 +316,7 @@ model PayoutAccount {
   accountNumberCiphertext String
   accountName             String
   verifiedAt              DateTime?
+  paystackRecipientCode   String?     @unique
   store                   SellerStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
   createdAt               DateTime    @default(now())
   updatedAt               DateTime    @updatedAt
@@ -437,23 +450,28 @@ model ProductVariant {
 }
 
 model Address {
-  id        String   @id @default(cuid())
-  userId    String
-  fullName  String
-  phone     String
-  line1     String
-  city      String
-  state     String
-  country   String   @default("NG")
-  landmark  String?
-  label     String   @default("Home")
-  isDefault Boolean  @default(false)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  orders    Order[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String
+  fullName    String
+  phone       String
+  line1       String
+  city        String
+  state       String
+  country     String   @default("NG")
+  landmark    String?
+  label       String   @default("Home")
+  isDefault   Boolean  @default(false)
+  googlePlaceId String?
+  area        String?
+  latitude    Float?
+  longitude   Float?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders      Order[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([userId, isDefault])
+  @@index([googlePlaceId])
 }
 
 model Cart {
@@ -572,11 +590,15 @@ model Order {
   items            OrderItem[]
   payments         Payment[]
   shipments        Shipment[]
+  settlements      SellerSettlement[]
+  giftContribution GiftContribution?
   supportTickets   SupportTicket[]
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   paidAt           DateTime?
   cancelledAt      DateTime?
+  buyerConfirmedDeliveredAt DateTime?
+  adminConfirmedDeliveredAt DateTime?
 
   @@index([buyerId, status, createdAt])
   @@index([status, createdAt])
@@ -594,6 +616,7 @@ model OrderItem {
   options       Json     @default("{}")
   order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product       Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  seller        SellerStore @relation(fields: [sellerId], references: [id], onDelete: Restrict)
   createdAt     DateTime @default(now())
 
   @@index([orderId])
@@ -612,6 +635,8 @@ model Payment {
   providerTransactionId String?
   verifiedAt            DateTime?
   failureReason         String?
+  metadata              Json              @default("{}")
+  payerEmail            String?
   idempotencyKey        String?           @unique
   order                 Order?            @relation(fields: [orderId], references: [id], onDelete: Restrict)
   events                PaymentEvent[]
@@ -622,6 +647,26 @@ model Payment {
 
   @@index([orderId, status])
   @@index([status, createdAt])
+}
+
+model SavedPaymentMethod {
+  id                    String   @id @default(cuid())
+  userId                String
+  authorizationCode     String   @unique
+  signature             String
+  cardType              String?
+  last4                 String
+  expMonth              String
+  expYear               String
+  bank                  String?
+  reusable              Boolean  @default(false)
+  active                Boolean  @default(true)
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  lastUsedAt            DateTime?
+
+  @@index([userId, active, createdAt])
 }
 
 model PaymentEvent {
@@ -652,6 +697,25 @@ model LedgerEntry {
 
   @@index([sellerId, createdAt])
   @@index([orderId, createdAt])
+}
+
+model SellerSettlement {
+  id                    String                 @id @default(cuid())
+  orderId               String
+  sellerId              String
+  amountKobo            BigInt
+  currency              String                 @default("NGN")
+  reference             String                 @unique
+  transferCode          String?
+  status                SellerSettlementStatus @default(PENDING)
+  failureReason         String?
+  order                 Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  seller                SellerStore            @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@unique([orderId, sellerId])
+  @@index([status, createdAt])
 }
 
 model Shipment {
@@ -756,13 +820,16 @@ model GiftContribution {
   wishlistId  String
   giverUserId String?
   paymentId   String                 @unique
+  orderId     String?                @unique
   giverName   String?
+  giverEmail  String?
   anonymous   Boolean                @default(false)
   message     String?
   status      GiftContributionStatus @default(PENDING)
   wishlist    Wishlist               @relation(fields: [wishlistId], references: [id], onDelete: Restrict)
   giver       User?                  @relation(fields: [giverUserId], references: [id], onDelete: SetNull)
   payment     Payment                @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  order       Order?                 @relation(fields: [orderId], references: [id], onDelete: SetNull)
   items       GiftContributionItem[]
   createdAt   DateTime               @default(now())
   paidAt      DateTime?
@@ -775,6 +842,7 @@ model GiftContributionItem {
   contributionId String
   productId      String
   amountKobo     BigInt
+  quantity       Int              @default(1)
   contribution   GiftContribution @relation(fields: [contributionId], references: [id], onDelete: Cascade)
   product        Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
 

@@ -1,6 +1,6 @@
 # OpenMarketz Backend
 
-Standalone NestJS API project for OpenMarketz. This directory is separate from the Next.js frontend and has no frontend integration configured.
+Standalone NestJS API project for OpenMarketz. The Next.js frontend connects to this API using `NEXT_PUBLIC_API_URL`.
 
 ## Stack
 
@@ -11,7 +11,7 @@ Standalone NestJS API project for OpenMarketz. This directory is separate from t
 - Socket.IO dependencies for buyer/seller chat
 - Resend dependency for email delivery
 
-Authentication, buyer onboarding, seller applications and approval, Cloudinary media authorization, product catalogue endpoints, product offers, and buyer/seller messaging are implemented. Upload intents sign only parameters accepted by Cloudinary's upload API; purpose-specific file-size limits are enforced by the browser and rechecked against Cloudinary's asset metadata during finalization. Orders, Paystack payments, and other marketplace workflows remain scaffold modules; no escrow or pay-on-delivery flow is enabled. Seller payout bank details are stored, but provider-specific bank codes and payout validation are not enabled until the payment integration is built.
+The API includes authenticated cart and address management, Google Places lookup, inventory-reserving checkout, Paystack payment initialization/verification/webhooks, saved Paystack authorizations, seller settlement controls, order history and delivery confirmations, Open Market requests and responses, wishlists and gifts, reviews, notifications, and support tickets. Upload intents sign only parameters accepted by Cloudinary's upload API; purpose-specific file-size limits are enforced by the browser and rechecked against Cloudinary's asset metadata during finalization.
 
 ## Requirements
 
@@ -79,9 +79,12 @@ For local signup and password-reset testing, set `AUTH_EMAIL_MODE=gmail` and pro
 | `KYC_ENCRYPTION_KEY`                                                   | KYC implementation; required in production  | 32-byte encryption key represented as 64 hex characters                                      |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Media upload implementation                 | Server-side Cloudinary signing credentials                                                   |
 | `PAYSTACK_SECRET_KEY`, `PAYSTACK_PUBLIC_KEY`, `PAYSTACK_CALLBACK_URL`  | Payment implementation                      | Paystack transaction setup and return URL                                                    |
+| `PENDING_ORDER_TTL_MINUTES`                                            | Pending checkout expiry                     | Minutes before an unpaid order expires (5–1440; defaults to 30)                              |
+| `GOOGLE_MAPS_API_KEY`                                                 | Address search                               | Server-side Google Places API (New) key; restrict it to Places API and keep it out of frontend variables |
 | `AUTH_EMAIL_MODE`                                                      | Email delivery                              | `console`, development-only `gmail`, or `resend`                                             |
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD`                                     | Gmail SMTP delivery                         | Gmail address and Google App Password; only used in development when `AUTH_EMAIL_MODE=gmail` |
 | `RESEND_API_KEY`, `EMAIL_FROM`                                         | Resend email delivery                       | Resend API key and verified sender domain; used when `AUTH_EMAIL_MODE=resend`                |
+| `TERMII_API_KEY`, `TERMII_SENDER_ID`                                   | SMS notifications                           | Termii credentials; SMS is sent only when the user enables it for that notification type     |
 | `REDIS_URL`                                                            | Optional future queue/WebSocket scaling     | Redis connection string                                                                      |
 | `SENTRY_DSN`                                                           | Optional monitoring                         | Error reporting destination                                                                  |
 
@@ -99,12 +102,23 @@ corepack pnpm db:studio
 
 Use development migrations only locally. Deploy reviewed, committed migrations with `db:migrate:deploy`.
 
+## Commerce behavior
+
+- Checkout recalculates product prices, stock, platform fee, and delivery fee on the server. Amounts are integer NGN values in API responses and kobo in the database.
+- Delivery is zone-priced in Abuja/FCT (APO starts at ₦1,000; more distant zones cost more). Other Nigerian states currently use a ₦3,500 standard delivery fee; express is 1.5× standard and pickup is free. Rates are in `OrdersService.getDeliveryFeeKobo`.
+- Paystack redirects back to `PAYSTACK_CALLBACK_URL`; configure that URL to the frontend checkout success page. Payment verification is server-to-server and webhook signatures are checked against the raw request body.
+- Saved cards are Paystack authorization references only. The API does not collect or persist card numbers or CVV.
+- An accepted Open Market offer can be checked out as a standard order with a server-calculated delivery/service quote and Paystack payment. Linked product stock is reserved during checkout.
+- Unpaid orders expire after `PENDING_ORDER_TTL_MINUTES` (30 by default). The API periodically cancels expired orders and releases reserved stock. A late successful Paystack charge is sent for refund and tracked as `REFUND_PENDING`; verify the refund in Paystack before treating it as settled.
+- Notification events are persisted in-app by default. Email and SMS are opt-in per notification category; email uses `RESEND_API_KEY` and SMS uses Termii. Delivery failures are logged and do not undo the in-app event.
+- Support conversations are persisted as ticket replies and admins can review/respond through the admin support inbox. The customer chat refreshes periodically; it is not a realtime agent connection.
+- Seller payouts require a configured Paystack transfer balance, verified payout account, and admin settlement confirmation. Transfers should be monitored and reconciled operationally.
+
 ## Modules
 
 `src/modules` contains:
 
-- Implemented: auth, users, seller applications/admin review, product catalogue, signed Cloudinary uploads, offers, and buyer/seller messaging
-- Scaffolded: cart, addresses, orders, Paystack payments, Open Market requests, notifications, wishlists/gifting, reviews, and support tickets
+- Implemented: auth, users, seller applications/admin review, product catalogue, signed Cloudinary uploads, offers, buyer/seller messaging, cart, addresses, orders, Paystack, Open Market, notifications, wishlists/gifts, reviews, and support tickets
 
 `prisma/schema.prisma` contains the relational data model. Money is stored in integer kobo fields; offer API request and response amounts use whole NGN values to match the product catalogue API.
 
@@ -152,6 +166,18 @@ The global API prefix is `/api/v1`. Public auth endpoints and catalogue browsing
 | `POST`   | `/messages/conversations`                                         | Authenticated buyer; opens or reuses a product conversation                   |
 | `POST`   | `/messages/conversations/:id/messages`                            | Authenticated conversation participant                                        |
 | `PATCH`  | `/messages/conversations/:id/read`                                | Authenticated conversation participant                                        |
+| `GET`    | `/orders/seller`                                                  | Authenticated seller                                                          |
+| `GET`    | `/orders/open-market/:responseId/quote`                           | Accepted-offer buyer                                                          |
+| `POST`   | `/orders/open-market/:responseId/checkout`                        | Accepted-offer buyer; creates order and initializes Paystack                  |
+| `PATCH`  | `/orders/:id/shipment`                                            | Seller for an order item; records fulfilment and hub                           |
+| `GET`    | `/open-market/responses/:id`                                      | Accepted-offer buyer or seller                                                |
+| `POST`   | `/payments/:reference/challenge`                                  | Authenticated buyer; submits a Paystack OTP/PIN/phone/birthday challenge       |
+| `POST`   | `/support/tickets`                                                | Public; creates a support ticket                                              |
+| `GET`    | `/support/tickets`                                                | Authenticated requester; ticket history                                       |
+| `GET`    | `/support/tickets/admin`                                          | Admin support inbox                                                           |
+| `GET`    | `/support/tickets/:id`                                            | Ticket requester or admin; history and replies                               |
+| `POST`   | `/support/tickets/:id/replies`                                    | Ticket requester or admin                                                     |
+| `PATCH`  | `/support/tickets/:id/status`                                     | Admin                                                                         |
 
 Offer creation accepts `{ "productId": "...", "quantity": 1, "offerPrice": 12000, "message": "..." }`, with optional `mediaId` for a previously uploaded voice note. Respond with `{ "action": "accept" }`, `{ "action": "decline" }`, or `{ "action": "counter", "counterPrice": 12500 }`. Countered offers can then be accepted or declined by the buyer. All offer and messaging routes require a verified user's access token. Message attachments must first be uploaded and finalized with the `MESSAGE` media purpose, then referenced by `mediaId`; arbitrary external media URLs are not accepted.
 
