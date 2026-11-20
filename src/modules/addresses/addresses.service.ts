@@ -85,23 +85,60 @@ export class AddressesService {
       });
       if (!existing) throw new NotFoundException('Address not found.');
     }
-    const place = await this.getPlace(input.googlePlaceId);
-    const getComponent = (...types: string[]) =>
-      place.addressComponents.find((component) =>
-        component.types?.some((type) => types.includes(type)),
-      )?.longText;
-    const country = getComponent('country');
-    if (country !== 'Nigeria') {
-      throw new BadRequestException('Delivery addresses must be in Nigeria.');
-    }
-    const state = getComponent('administrative_area_level_1');
-    const city =
-      getComponent('sublocality_level_1', 'neighborhood', 'locality') ??
-      getComponent('administrative_area_level_2');
-    if (!state || !city) {
-      throw new BadRequestException(
-        'Choose a complete street address in Nigeria.',
-      );
+    let addressDetails: {
+      line1: string;
+      city: string;
+      state: string;
+      googlePlaceId: string | null;
+      area: string;
+      latitude: number | null;
+      longitude: number | null;
+    };
+    if (input.googlePlaceId) {
+      const place = await this.getPlace(input.googlePlaceId);
+      const getComponent = (...types: string[]) =>
+        place.addressComponents.find((component) =>
+          component.types?.some((type) => types.includes(type)),
+        )?.longText;
+      if (getComponent('country') !== 'Nigeria') {
+        throw new BadRequestException('Delivery addresses must be in Nigeria.');
+      }
+      const state = getComponent('administrative_area_level_1');
+      const city =
+        getComponent('sublocality_level_1', 'neighborhood', 'locality') ??
+        getComponent('administrative_area_level_2');
+      if (!state || !city) {
+        throw new BadRequestException(
+          'Choose a complete street address in Nigeria.',
+        );
+      }
+      addressDetails = {
+        line1: place.formattedAddress,
+        city,
+        state,
+        googlePlaceId: place.id,
+        area: city,
+        latitude: place.location.latitude,
+        longitude: place.location.longitude,
+      };
+    } else {
+      const line1 = input.line1?.trim();
+      const city = input.city?.trim();
+      const state = input.state?.trim();
+      if (!line1 || !city || !state) {
+        throw new BadRequestException(
+          'Enter a street address, city, and state.',
+        );
+      }
+      addressDetails = {
+        line1,
+        city,
+        state,
+        googlePlaceId: null,
+        area: city,
+        latitude: null,
+        longitude: null,
+      };
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -114,16 +151,16 @@ export class AddressesService {
       const data = {
         fullName: input.fullName.trim(),
         phone: input.phone.trim(),
-        line1: place.formattedAddress,
-        city,
-        state,
+        line1: addressDetails.line1,
+        city: addressDetails.city,
+        state: addressDetails.state,
         country: 'NG',
         landmark: input.landmark?.trim() || null,
         label: input.label,
-        googlePlaceId: place.id,
-        area: city,
-        latitude: place.location.latitude,
-        longitude: place.location.longitude,
+        googlePlaceId: addressDetails.googlePlaceId,
+        area: addressDetails.area,
+        latitude: addressDetails.latitude,
+        longitude: addressDetails.longitude,
         isDefault: input.isDefault ?? !addressId,
       };
       return addressId

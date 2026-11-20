@@ -25,6 +25,12 @@ describe('validateEnvironment', () => {
     ).not.toThrow();
   });
 
+  it('accepts a Paystack secret key without a public key for hosted checkout', () => {
+    expect(() =>
+      validateEnvironment({ PAYSTACK_SECRET_KEY: 'sk_test_example' }),
+    ).not.toThrow();
+  });
+
   it('allows console email delivery only in development', () => {
     expect(
       validateEnvironment({

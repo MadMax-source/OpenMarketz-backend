@@ -9,9 +9,25 @@ export class SaveAddressDto {
   @Length(7, 24)
   phone!: string;
 
+  @IsOptional()
+  @IsString()
+  @Length(5, 200)
+  googlePlaceId?: string;
+
+  @IsOptional()
   @IsString()
   @Length(5, 191)
-  googlePlaceId!: string;
+  line1?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 120)
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 120)
+  state?: string;
 
   @IsIn(['Home', 'Work', 'Other'])
   label!: string;

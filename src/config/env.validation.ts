@@ -55,8 +55,6 @@ const environmentSchema = Joi.object({
     'CLOUDINARY_CLOUD_NAME',
     'CLOUDINARY_API_KEY',
   ])
-  .with('PAYSTACK_SECRET_KEY', ['PAYSTACK_PUBLIC_KEY'])
-  .with('PAYSTACK_PUBLIC_KEY', ['PAYSTACK_SECRET_KEY'])
   .unknown(true);
 
 export function validateEnvironment(config: Record<string, unknown>) {
